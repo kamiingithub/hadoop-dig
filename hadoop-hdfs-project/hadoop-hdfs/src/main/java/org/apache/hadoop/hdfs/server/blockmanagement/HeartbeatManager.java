@@ -219,6 +219,7 @@ class HeartbeatManager implements DatanodeStatistics {
       StorageReport[] reports, long cacheCapacity, long cacheUsed,
       int xceiverCount, int failedVolumes) {
     stats.subtract(node);
+    // 更新DatanodeDescriptor里的一堆信息
     node.updateHeartbeat(reports, cacheCapacity, cacheUsed,
         xceiverCount, failedVolumes);
     stats.add(node);
@@ -282,6 +283,7 @@ class HeartbeatManager implements DatanodeStatistics {
       int numOfStaleStorages = 0;
       synchronized(this) {
         for (DatanodeDescriptor d : datanodes) {
+          // 判断是否宕机
           if (dead == null && dm.isDatanodeDead(d)) {
             stats.incrExpiredHeartbeats();
             dead = d;
@@ -318,6 +320,7 @@ class HeartbeatManager implements DatanodeStatistics {
             return;
           }
           synchronized(this) {
+            // 移除宕机的 dataNode
             dm.removeDeadDatanode(dead);
           }
         } finally {
@@ -352,7 +355,9 @@ class HeartbeatManager implements DatanodeStatistics {
       while(namesystem.isRunning()) {
         try {
           final long now = Time.now();
+          // 当前时间 > 最近心跳 + 间隔
           if (lastHeartbeatCheck + heartbeatRecheckInterval < now) {
+            // 检查心跳，宕机就摘除
             heartbeatCheck();
             lastHeartbeatCheck = now;
           }

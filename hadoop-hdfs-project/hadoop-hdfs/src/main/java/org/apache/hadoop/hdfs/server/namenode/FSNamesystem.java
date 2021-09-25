@@ -727,6 +727,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   static FSNamesystem loadFromDisk(Configuration conf) throws IOException {
 
     checkConfiguration(conf);
+    // 从磁盘获取edit log + FSImage 并合并
     FSImage fsImage = new FSImage(conf,
         FSNamesystem.getNamespaceDirs(conf),
         FSNamesystem.getNamespaceEditsDirs(conf));
@@ -738,6 +739,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
     long loadStart = now();
     try {
+      // 根据指令，将FSImage加载进namesystem
       namesystem.loadFSImage(startOpt);
     } catch (IOException ioe) {
       LOG.warn("Encountered exception loading fsimage", ioe);
@@ -1102,14 +1104,18 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     writeLock();
     this.haContext = haContext;
     try {
+      // 把要check的dir放进volumes
       nnResourceChecker = new NameNodeResourceChecker(conf);
+      // 检查资源是否可用
       checkAvailableResources();
+      // 检查是否进入safe mode
       assert safeMode != null && !isPopulatingReplQueues();
       StartupProgress prog = NameNode.getStartupProgress();
       prog.beginPhase(Phase.SAFEMODE);
       prog.setTotal(Phase.SAFEMODE, STEP_AWAITING_REPORTED_BLOCKS,
         getCompleteBlocksTotal());
       setBlockTotal();
+      // 启动一些后台线程
       blockManager.activate(conf);
     } finally {
       writeUnlock();
@@ -1424,7 +1430,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           "\n\tThe NameNode currently runs without persistent storage." +
           "\n\tAny changes to the file system meta-data may be lost." +
           "\n\tRecommended actions:" +
-          "\n\t\t- shutdown and restart NameNode with configured \"" 
+          "\n\t\t- shutdown and restart NameNode with configured \""
           + propertyName + "\" in hdfs-site.xml;" +
           "\n\t\t- use Backup Node as a persistent and up-to-date storage " +
           "of the file system meta-data.");
@@ -5047,6 +5053,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   void registerDatanode(DatanodeRegistration nodeReg) throws IOException {
     writeLock();
     try {
+      // 注册
       getBlockManager().getDatanodeManager().registerDatanode(nodeReg);
       checkSafeMode();
     } finally {
@@ -5084,6 +5091,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       //get datanode commands
       final int maxTransfer = blockManager.getMaxReplicationStreams()
           - xmitsInProgress;
+      // 交给dataNodeManager处理
       DatanodeCommand[] cmds = blockManager.getDatanodeManager().handleHeartbeat(
           nodeReg, reports, blockPoolId, cacheCapacity, cacheUsed,
           xceiverCount, maxTransfer, failedVolumes);

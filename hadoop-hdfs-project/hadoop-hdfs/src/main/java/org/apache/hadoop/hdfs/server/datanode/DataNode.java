@@ -689,6 +689,7 @@ public class DataNode extends ReconfigurableBase
           .getPackage().getName() + ";" + Param.class.getPackage().getName(),
           WebHdfsFileSystem.PATH_PREFIX + "/*");
     }
+    // 启动
     this.infoServer.start();
 
     int connIdx = 0;
@@ -721,6 +722,7 @@ public class DataNode extends ReconfigurableBase
     // Add all the RPC protocols that the Datanode implements    
     RPC.setProtocolEngine(conf, ClientDatanodeProtocolPB.class,
         ProtobufRpcEngine.class);
+    // 1.提供一堆client和dataNode通信的接口实现
     ClientDatanodeProtocolServerSideTranslatorPB clientDatanodeProtocolXlator = 
           new ClientDatanodeProtocolServerSideTranslatorPB(this);
     BlockingService service = ClientDatanodeProtocolService
@@ -734,7 +736,8 @@ public class DataNode extends ReconfigurableBase
             conf.getInt(DFS_DATANODE_HANDLER_COUNT_KEY,
                 DFS_DATANODE_HANDLER_COUNT_DEFAULT)).setVerbose(false)
         .setSecretManager(blockPoolTokenSecretManager).build();
-    
+
+    // 2.提供一堆dataNode和dataNode通信的接口实现
     InterDatanodeProtocolServerSideTranslatorPB interDatanodeProtocolXlator = 
         new InterDatanodeProtocolServerSideTranslatorPB(this);
     service = InterDatanodeProtocolService
@@ -742,6 +745,7 @@ public class DataNode extends ReconfigurableBase
     DFSUtil.addPBProtocol(conf, InterDatanodeProtocolPB.class, service,
         ipcServer);
 
+    // 3.Span接口实现
     TraceAdminProtocolServerSideTranslatorPB traceAdminXlator =
         new TraceAdminProtocolServerSideTranslatorPB(this);
     BlockingService traceAdminService = TraceAdminService
@@ -879,6 +883,7 @@ public class DataNode extends ReconfigurableBase
     streamingAddr = tcpPeerServer.getStreamingAddr();
     LOG.info("Opened streaming server at " + streamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
+    // 负责为 client和dataNode提供block的读写操作
     xserver = new DataXceiverServer(tcpPeerServer, conf, this);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
@@ -1081,11 +1086,14 @@ public class DataNode extends ReconfigurableBase
     LOG.info("Starting DataNode with maxLockedMemory = " +
         dnConf.maxLockedMemory);
 
+    // 管理block数据的组件
     storage = new DataStorage();
     
     // global DN settings
     registerMXBean();
+    // 为client和dataNode提供数据流方式的block读写
     initDataXceiver(conf);
+    // 启动http server(同NameNode)
     startInfoServer(conf);
     pauseMonitor = new JvmPauseMonitor(conf);
     pauseMonitor.start();
@@ -1097,12 +1105,15 @@ public class DataNode extends ReconfigurableBase
     dnUserName = UserGroupInformation.getCurrentUser().getShortUserName();
     LOG.info("dnUserName = " + dnUserName);
     LOG.info("supergroup = " + supergroup);
+    // 初始化 rpc server(同NameNode)
     initIpcServer(conf);
 
     metrics = DataNodeMetrics.create(conf, getDisplayName());
     metrics.getJvmMetrics().setPauseMonitor(pauseMonitor);
-    
+
+    // blockPoolManager
     blockPoolManager = new BlockPoolManager(this);
+    // 刷新nameNode信息
     blockPoolManager.refreshNamenodes(conf);
 
     // Create the ReadaheadPool from the DataNode context so we can
@@ -1301,17 +1312,21 @@ public class DataNode extends ReconfigurableBase
     setClusterId(nsInfo.clusterID, nsInfo.getBlockPoolID());
 
     // Register the new block pool with the BP manager.
+    // 注册一个新的blokPool
     blockPoolManager.addBlockPool(bpos);
     
     // In the case that this is the first block pool to connect, initialize
     // the dataset, block scanners, etc.
+    // 初始化storage
     initStorage(nsInfo);
 
     // Exclude failed disks before initializing the block pools to avoid startup
     // failures.
     checkDiskError();
 
+    // 往FsDatasetImpl里的一些数据结构加入了 bpid
     data.addBlockPool(nsInfo.getBlockPoolID(), conf);
+    // 启动一些定时调度的线程
     initPeriodicScanners(conf);
   }
 
@@ -1348,10 +1363,13 @@ public class DataNode extends ReconfigurableBase
     }
 
     // If this is a newly formatted DataNode then assign a new DatanodeUuid.
+    // 分配一个uuid
     checkDatanodeUuid();
 
     synchronized(this)  {
       if (data == null) {
+        // 核心 *创建一个FsDatasetSpi实例*
+        // 其底层的FsDatasetImpl负责底层的磁盘文件的读写操作
         data = factory.newInstance(this, storage, conf);
       }
     }
@@ -2162,13 +2180,16 @@ public class DataNode extends ReconfigurableBase
    *  If this thread is specifically interrupted, it will stop waiting.
    */
   public void runDatanodeDaemon() throws IOException {
+    // 启动所有 BPServiceActor 线程
     blockPoolManager.startAll();
 
     // start dataXceiveServer
+    // 启动dataXceiverServer，监听一个端口号，后面可以提供block数据流的读写
     dataXceiverServer.start();
     if (localDataXceiverServer != null) {
       localDataXceiverServer.start();
     }
+    // 启动rpc server，监听一个端口号，后面可以接受rpc请求
     ipcServer.start();
     startPlugins(conf);
   }
@@ -2263,8 +2284,10 @@ public class DataNode extends ReconfigurableBase
   @InterfaceAudience.Private
   public static DataNode createDataNode(String args[], Configuration conf,
       SecureResources resources) throws IOException {
+    // 实例化dataNode,同时会进行一些组件的初始化
     DataNode dn = instantiateDataNode(args, conf, resources);
     if (dn != null) {
+      // 启动一些server和后台线程
       dn.runDatanodeDaemon();
     }
     return dn;
@@ -2439,8 +2462,10 @@ public class DataNode extends ReconfigurableBase
     int errorCode = 0;
     try {
       StringUtils.startupShutdownMessage(DataNode.class, args, LOG);
+      // 创建DataNode
       DataNode datanode = createDataNode(args, null, resources);
       if (datanode != null) {
+        // keep server running...
         datanode.join();
       } else {
         errorCode = 1;

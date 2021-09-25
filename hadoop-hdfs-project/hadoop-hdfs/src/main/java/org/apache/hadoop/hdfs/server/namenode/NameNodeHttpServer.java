@@ -139,6 +139,7 @@ public class NameNodeHttpServer {
     httpServer.setAttribute(NAMENODE_ATTRIBUTE_KEY, nn);
     httpServer.setAttribute(JspHelper.CURRENT_CONF, conf);
     setupServlets(httpServer, conf);
+    // 启动http server
     httpServer.start();
 
     int connIdx = 0;

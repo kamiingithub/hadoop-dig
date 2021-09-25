@@ -172,6 +172,7 @@ class BPServiceActor implements Runnable {
     NamespaceInfo nsInfo = null;
     while (shouldRun()) {
       try {
+        // rpc调用nameNode获取 namespace info
         nsInfo = bpNamenode.versionRequest();
         LOG.debug(this + " received versionRequest response: " + nsInfo);
         break;
@@ -186,6 +187,7 @@ class BPServiceActor implements Runnable {
     }
     
     if (nsInfo != null) {
+      // check一下dataNode和nameNode的version是否一样
       checkNNVersion(nsInfo);
     } else {
       throw new IOException("DN shut down before block pool connected");
@@ -214,18 +216,22 @@ class BPServiceActor implements Runnable {
 
   private void connectToNNAndHandshake() throws IOException {
     // get NN proxy
+    // 获取一个调用NameNode的rpc接口的proxy
     bpNamenode = dn.connectToNN(nnAddr);
 
-    // First phase of the handshake with NN - get the namespace
-    // info.
+    // First phase of the handshake with NN - get the namespace info.
+    // 1.获取 namespace info
     NamespaceInfo nsInfo = retrieveNamespaceInfo();
     
     // Verify that this matches the other NN in this HA pair.
     // This also initializes our block pool in the DN if we are
     // the first NN connection for this BP.
+    // 2.如果是一组nameNode里的第一个，则初始化blockPool
+    // 否则强校验nsInfo的信息是否一致
     bpos.verifyAndSetNamespaceInfo(nsInfo);
     
     // Second phase of the handshake with the NN.
+    // 3.注册
     register();
   }
 
@@ -470,6 +476,7 @@ class BPServiceActor implements Runnable {
   List<DatanodeCommand> blockReport() throws IOException {
     // send block report if timer has expired.
     final long startTime = now();
+    // 默认间隔 6小时
     if (startTime - lastBlockReport <= dnConf.blockReportInterval) {
       return null;
     }
@@ -553,6 +560,7 @@ class BPServiceActor implements Runnable {
                   (nCmds + " commands: " + Joiner.on("; ").join(cmds)))) +
           ".");
     }
+    // 调度下次 report 时间
     scheduleNextBlockReport(startTime);
     return cmds.size() == 0 ? null : cmds;
   }
@@ -712,6 +720,7 @@ class BPServiceActor implements Runnable {
           //
           lastHeartbeat = startTime;
           if (!dn.areHeartbeatsDisabledForTests()) {
+            // 1.heartBeat
             HeartbeatResponse resp = sendHeartBeat();
             assert resp != null;
             dn.getMetrics().addHeartbeat(now() - startTime);
@@ -722,6 +731,7 @@ class BPServiceActor implements Runnable {
             // Important that this happens before processCommand below,
             // since the first heartbeat to a new active might have commands
             // that we should actually process.
+            // 更新当前 actor 的状态，是active or standBy
             bpos.updateActorStatesFromHeartbeat(
                 this, resp.getNameNodeHaState());
             state = resp.getNameNodeHaState().getState();
@@ -731,6 +741,7 @@ class BPServiceActor implements Runnable {
             }
 
             long startProcessCommands = now();
+            // 处理command
             if (!processCommand(resp.getCommands()))
               continue;
             long endProcessCommands = now();
@@ -741,12 +752,15 @@ class BPServiceActor implements Runnable {
             }
           }
         }
+
         if (sendImmediateIBR ||
             (startTime - lastDeletedReport > dnConf.deleteReportInterval)) {
+          // report被删除的blocks
           reportReceivedDeletedBlocks();
           lastDeletedReport = startTime;
         }
 
+        // 2.blockReport
         List<DatanodeCommand> cmds = blockReport();
         processCommand(cmds == null ? null : cmds.toArray(new DatanodeCommand[cmds.size()]));
 
@@ -811,6 +825,7 @@ class BPServiceActor implements Runnable {
   void register() throws IOException {
     // The handshake() phase loaded the block pool storage
     // off disk - so update the bpRegistration object from that info
+    // 构建注册请求体
     bpRegistration = bpos.createRegistration();
 
     LOG.info(this + " beginning handshake with NN");
@@ -818,6 +833,7 @@ class BPServiceActor implements Runnable {
     while (shouldRun()) {
       try {
         // Use returned registration from namenode with updated fields
+        // 1.发起注册
         bpRegistration = bpNamenode.registerDatanode(bpRegistration);
         break;
       } catch(EOFException e) {  // namenode might have just restarted
@@ -834,6 +850,7 @@ class BPServiceActor implements Runnable {
     bpos.registrationSucceeded(this, bpRegistration);
 
     // random short delay - helps scatter the BR from all DNs
+    // 2.update blockReport时间
     scheduleBlockReport(dnConf.initialBlockReportDelay);
   }
 
@@ -864,6 +881,7 @@ class BPServiceActor implements Runnable {
         // init stuff
         try {
           // setup storage
+          // 1.连接到nameNode并注册 + blockReport
           connectToNNAndHandshake();
           break;
         } catch (IOException ioe) {
@@ -886,6 +904,7 @@ class BPServiceActor implements Runnable {
 
       while (shouldRun()) {
         try {
+          // 2.heartBeat + blockReport
           offerService();
         } catch (Exception ex) {
           LOG.error("Exception in BPOfferService for " + this, ex);

@@ -89,6 +89,7 @@ public class DatanodeProtocolServerSideTranslatorPB implements
         .getRegistration());
     DatanodeRegistration registrationResp;
     try {
+      // 处理注册请求
       registrationResp = impl.registerDatanode(registration);
     } catch (IOException e) {
       throw new ServiceException(e);
@@ -104,6 +105,7 @@ public class DatanodeProtocolServerSideTranslatorPB implements
     try {
       final StorageReport[] report = PBHelper.convertStorageReports(
           request.getReportsList());
+      // 心跳
       response = impl.sendHeartbeat(PBHelper.convert(request.getRegistration()),
           report, request.getCacheCapacity(), request.getCacheUsed(),
           request.getXmitsInProgress(),

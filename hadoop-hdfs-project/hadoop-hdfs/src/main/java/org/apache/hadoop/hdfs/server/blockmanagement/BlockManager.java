@@ -438,8 +438,11 @@ public class BlockManager {
   }
 
   public void activate(Configuration conf) {
+    // check正在处理中的block
     pendingReplications.start();
+    // check dataNode的停用状态和心跳
     datanodeManager.activate(conf);
+    // 复制block相关的线程
     this.replicationThread.start();
   }
 

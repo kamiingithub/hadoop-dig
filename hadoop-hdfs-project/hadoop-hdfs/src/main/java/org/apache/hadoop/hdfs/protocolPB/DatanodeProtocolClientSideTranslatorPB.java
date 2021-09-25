@@ -111,6 +111,7 @@ public class DatanodeProtocolClientSideTranslatorPB implements
         .newBuilder().setRegistration(PBHelper.convert(registration));
     RegisterDatanodeResponseProto resp;
     try {
+      // DatanodeProtocolServerSideTranslatorPB#registerDatanode
       resp = rpcProxy.registerDatanode(NULL_CONTROLLER, builder.build());
     } catch (ServiceException se) {
       throw ProtobufHelper.getRemoteException(se);
@@ -136,6 +137,7 @@ public class DatanodeProtocolClientSideTranslatorPB implements
     }
     HeartbeatResponseProto resp;
     try {
+      // DatanodeProtocolServerSideTranslatorPB#sendHeartbeat
       resp = rpcProxy.sendHeartbeat(NULL_CONTROLLER, builder.build());
     } catch (ServiceException se) {
       throw ProtobufHelper.getRemoteException(se);

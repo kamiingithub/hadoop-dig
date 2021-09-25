@@ -444,6 +444,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
     setCacheCapacity(cacheCapacity);
     setCacheUsed(cacheUsed);
     setXceiverCount(xceiverCount);
+    // 更新心跳时间
     setLastUpdate(Time.now());    
     this.volumeFailures = volFailures;
     for (StorageReport report : reports) {

@@ -303,8 +303,9 @@ public class DatanodeManager {
                     DFSConfigKeys.DFS_NAMENODE_DECOMMISSION_INTERVAL_DEFAULT),
         conf.getInt(DFSConfigKeys.DFS_NAMENODE_DECOMMISSION_NODES_PER_INTERVAL_KEY, 
                     DFSConfigKeys.DFS_NAMENODE_DECOMMISSION_NODES_PER_INTERVAL_DEFAULT)));
+    // check停用状态
     decommissionthread.start();
-
+    // check心跳
     heartbeatManager.activate(conf);
   }
 
@@ -557,6 +558,7 @@ public class DatanodeManager {
         if (d != null && isDatanodeDead(d)) {
           NameNode.stateChangeLog.info(
               "BLOCK* removeDeadDatanode: lost heartbeat from " + d);
+          // 移除
           removeDatanode(d);
         }
       }
@@ -564,6 +566,7 @@ public class DatanodeManager {
 
   /** Is the datanode dead? */
   boolean isDatanodeDead(DatanodeDescriptor node) {
+    // 默认 10min + 30s
     return (node.getLastUpdate() <
             (Time.now() - heartbeatExpireInterval));
   }
@@ -982,6 +985,7 @@ public class DatanodeManager {
         return;
       }
 
+      // 构造一个 datanodeDescriptor
       DatanodeDescriptor nodeDescr 
         = new DatanodeDescriptor(nodeReg, NetworkTopology.DEFAULT_RACK);
       boolean success = false;
@@ -1006,6 +1010,7 @@ public class DatanodeManager {
         // also treat the registration message as a heartbeat
         // no need to update its timestamp
         // because its is done when the descriptor is created
+        // 加到 heartbeatManager 里，交给它管理
         heartbeatManager.addDatanode(nodeDescr);
         success = true;
         incrementVersionCount(nodeReg.getSoftwareVersion());
@@ -1382,6 +1387,7 @@ public class DatanodeManager {
           return new DatanodeCommand[]{RegisterCommand.REGISTER};
         }
 
+        // 更新一堆状态
         heartbeatManager.updateHeartbeat(nodeinfo, reports,
                                          cacheCapacity, cacheUsed,
                                          xceiverCount, failedVolumes);
@@ -1392,6 +1398,7 @@ public class DatanodeManager {
           return new DatanodeCommand[0];
         }
 
+        // fixme 下面就是nameNode给dataNode分配command
         //check lease recovery
         BlockInfoUnderConstruction[] blocks = nodeinfo
             .getLeaseRecoveryCommand(Integer.MAX_VALUE);

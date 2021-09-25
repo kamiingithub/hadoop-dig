@@ -824,6 +824,7 @@ public final class HttpServer2 implements FilterContainer {
    */
   public void start() throws IOException {
     try {
+      // 启动jetty server
       try {
         openListeners();
         webServer.start();

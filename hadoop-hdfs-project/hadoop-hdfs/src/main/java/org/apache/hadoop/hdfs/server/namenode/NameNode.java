@@ -590,13 +590,16 @@ public class NameNode implements NameNodeStatusMXBean {
     StartupProgressMetrics.register(startupProgress);
 
     if (NamenodeRole.NAMENODE == role) {
+      // 1.启动http server
       startHttpServer(conf);
     }
 
     this.spanReceiverHost = SpanReceiverHost.getInstance(conf);
 
+    // 2.从磁盘加载元数据 edit log + FSImage
     loadNamesystem(conf);
 
+    // 3.创建rpc server
     rpcServer = createRpcServer(conf);
     if (clientNamenodeAddress == null) {
       // This is expected for MiniDFSCluster. Set it now using 
@@ -614,7 +617,7 @@ public class NameNode implements NameNodeStatusMXBean {
     pauseMonitor = new JvmPauseMonitor(conf);
     pauseMonitor.start();
     metrics.getJvmMetrics().setPauseMonitor(pauseMonitor);
-    
+    // 4.启动服务
     startCommonServices(conf);
   }
   
@@ -629,6 +632,7 @@ public class NameNode implements NameNodeStatusMXBean {
 
   /** Start the services common to active and standby states */
   private void startCommonServices(Configuration conf) throws IOException {
+    // start
     namesystem.startCommonServices(conf, haContext);
     registerNNSMXBean();
     if (NamenodeRole.NAMENODE != role) {
@@ -636,6 +640,7 @@ public class NameNode implements NameNodeStatusMXBean {
       httpServer.setNameNodeAddress(getNameNodeAddress());
       httpServer.setFSImage(getFSImage());
     }
+    // 启动rpcServer
     rpcServer.start();
     plugins = conf.getInstances(DFS_NAMENODE_PLUGINS_KEY,
         ServicePlugin.class);
@@ -762,6 +767,7 @@ public class NameNode implements NameNodeStatusMXBean {
     this.haContext = createHAContext();
     try {
       initializeGenericKeys(conf, nsId, namenodeId);
+      // initialize
       initialize(conf);
       try {
         haContext.writeLock();
@@ -1443,6 +1449,7 @@ public class NameNode implements NameNodeStatusMXBean {
       }
       default: {
         DefaultMetricsSystem.initialize("NameNode");
+        // 构建name node
         return new NameNode(conf);
       }
     }
@@ -1509,8 +1516,10 @@ public class NameNode implements NameNodeStatusMXBean {
 
     try {
       StringUtils.startupShutdownMessage(NameNode.class, argv, LOG);
+      // 创建nameNode
       NameNode namenode = createNameNode(argv, null);
       if (namenode != null) {
+        // keep server running...
         namenode.join();
       }
     } catch (Throwable e) {

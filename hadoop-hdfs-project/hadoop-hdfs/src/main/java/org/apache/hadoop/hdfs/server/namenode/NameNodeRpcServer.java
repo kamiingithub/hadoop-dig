@@ -216,6 +216,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
     RPC.setProtocolEngine(conf, ClientNamenodeProtocolPB.class,
         ProtobufRpcEngine.class);
 
+    // 这里是获取RPC protocols的实现
     ClientNamenodeProtocolServerSideTranslatorPB 
        clientProtocolServerTranslator = 
          new ClientNamenodeProtocolServerSideTranslatorPB(this);
@@ -291,6 +292,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
           .setSecretManager(namesystem.getDelegationTokenSecretManager())
           .build();
 
+      // 把上面的实现都加到对应协议
       // Add all the RPC protocols that the namenode implements
       DFSUtil.addPBProtocol(conf, HAServiceProtocolPB.class, haPbService,
           serviceRpcServer);

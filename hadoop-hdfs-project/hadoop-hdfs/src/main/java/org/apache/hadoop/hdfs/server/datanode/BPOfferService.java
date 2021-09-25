@@ -271,6 +271,7 @@ class BPOfferService {
   //This must be called only by blockPoolManager
   void start() {
     for (BPServiceActor actor : bpServices) {
+      // 对该组nameNode的nameNode节点
       actor.start();
     }
   }
@@ -311,6 +312,7 @@ class BPOfferService {
         // The DN can now initialize its local storage if we are the
         // first BP to handshake, etc.
         try {
+          // 初始化dataNode本地的blockPool并启动一些后台线程
           dn.initBlockPool(this);
           success = true;
         } finally {
