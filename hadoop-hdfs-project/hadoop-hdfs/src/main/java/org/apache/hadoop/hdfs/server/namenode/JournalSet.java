@@ -269,12 +269,14 @@ public class JournalSet implements JournalManager {
     final PriorityQueue<EditLogInputStream> allStreams = 
         new PriorityQueue<EditLogInputStream>(64,
             EDIT_LOG_INPUT_STREAM_COMPARATOR);
+    // 一个journal节点对应一个stream
     for (JournalAndStream jas : journals) {
       if (jas.isDisabled()) {
         LOG.info("Skipping jas " + jas + " since it's disabled");
         continue;
       }
       try {
+        // select 输入流
         jas.getManager().selectInputStreams(allStreams, fromTxId, inProgressOk);
       } catch (IOException ioe) {
         LOG.warn("Unable to determine input streams from " + jas.getManager() +

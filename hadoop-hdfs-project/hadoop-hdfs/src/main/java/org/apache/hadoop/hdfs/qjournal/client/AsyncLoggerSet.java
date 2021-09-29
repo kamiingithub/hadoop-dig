@@ -122,6 +122,7 @@ class AsyncLoggerSet {
    */
   <V> Map<AsyncLogger, V> waitForWriteQuorum(QuorumCall<AsyncLogger, V> q,
       int timeoutMs, String operationName) throws IOException {
+    // 计算majority
     int majority = getMajoritySize();
     try {
       q.waitFor(
@@ -253,6 +254,7 @@ class AsyncLoggerSet {
   public QuorumCall<AsyncLogger, Void> sendEdits(
       long segmentTxId, long firstTxnId, int numTxns, byte[] data) {
     Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
+    // 把send给每个journal节点的 future 保存住
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future = 
         logger.sendEdits(segmentTxId, firstTxnId, numTxns, data);

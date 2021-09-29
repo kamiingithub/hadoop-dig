@@ -330,6 +330,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
     }
     LOG.info("RPC server is binding to " + bindHost + ":" + rpcAddr.getPort());
 
+    // 处理客户端请求的 rpc server
     this.clientRpcServer = new RPC.Builder(conf)
         .setProtocol(
             org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolPB.class)

@@ -62,7 +62,6 @@ import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
@@ -952,4 +951,12 @@ public class TestDFSUtil {
     } catch (IOException ignored) {
     }
   }
+
+  @Test
+  public void testNormalizePath() throws IOException {
+    String path = "/user/data/log";
+    byte[][] pathComponents = DFSUtil.getPathComponents(path);
+    System.out.println(Arrays.deepToString(pathComponents));
+  }
+
 }

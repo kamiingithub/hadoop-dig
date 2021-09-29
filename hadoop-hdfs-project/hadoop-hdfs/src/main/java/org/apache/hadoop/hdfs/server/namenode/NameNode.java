@@ -640,7 +640,7 @@ public class NameNode implements NameNodeStatusMXBean {
       httpServer.setNameNodeAddress(getNameNodeAddress());
       httpServer.setFSImage(getFSImage());
     }
-    // 启动rpcServer
+    // 启动rpcServer client + service
     rpcServer.start();
     plugins = conf.getInstances(DFS_NAMENODE_PLUGINS_KEY,
         ServicePlugin.class);

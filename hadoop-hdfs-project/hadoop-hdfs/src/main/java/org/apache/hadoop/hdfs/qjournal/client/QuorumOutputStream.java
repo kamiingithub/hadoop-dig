@@ -46,6 +46,7 @@ class QuorumOutputStream extends EditLogOutputStream {
 
   @Override
   public void write(FSEditLogOp op) throws IOException {
+    // journal也是先写双段缓冲
     buf.writeOp(op);
   }
 
@@ -101,14 +102,17 @@ class QuorumOutputStream extends EditLogOutputStream {
       byte[] data = bufToSend.getData();
       assert data.length == bufToSend.getLength();
 
+      // 向journal集群send
       QuorumCall<AsyncLogger, Void> qcall = loggers.sendEdits(
           segmentTxId, firstTxToFlush,
           numReadyTxns, data);
+      // 等待写到大多数journal节点成功
       loggers.waitForWriteQuorum(qcall, writeTimeoutMs, "sendEdits");
       
       // Since we successfully wrote this batch, let the loggers know. Any future
       // RPCs will thus let the loggers know of the most recent transaction, even
       // if a logger has fallen behind.
+      // 对每个logger设置committedTxId
       loggers.setCommittedTxId(firstTxToFlush + numReadyTxns - 1);
     }
   }

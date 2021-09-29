@@ -727,7 +727,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   static FSNamesystem loadFromDisk(Configuration conf) throws IOException {
 
     checkConfiguration(conf);
-    // 从磁盘获取edit log + FSImage 并合并
+    // 根据配置构建 FSImage
     FSImage fsImage = new FSImage(conf,
         FSNamesystem.getNamespaceDirs(conf),
         FSNamesystem.getNamespaceEditsDirs(conf));
@@ -739,7 +739,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
     long loadStart = now();
     try {
-      // 根据指令，将FSImage加载进namesystem
+      // 从磁盘获取edit log + FSImage 并合并
+      // 将FSImage加载进namesystem
       namesystem.loadFSImage(startOpt);
     } catch (IOException ioe) {
       LOG.warn("Encountered exception loading fsimage", ioe);
@@ -1021,6 +1022,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     try {
       // We shouldn't be calling saveNamespace if we've come up in standby state.
       MetaRecoveryContext recovery = startOpt.createRecoveryContext();
+
+      // 加载editLog+FSImage到内存 并合并
       final boolean staleImage
           = fsImage.recoverTransitionRead(startOpt, this, recovery);
       if (RollingUpgradeStartupOption.ROLLBACK.matches(startOpt) ||
@@ -1045,6 +1048,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       // we shouldn't do it when coming up in standby state
       if (!haEnabled || (haEnabled && startOpt == StartupOption.UPGRADE)
           || (haEnabled && startOpt == StartupOption.UPGRADEONLY)) {
+        // 打开editLog数据流,为后续写入做准备
         fsImage.openEditLogForWrite();
       }
       success = true;
@@ -1452,6 +1456,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
    */
   public static List<URI> getNamespaceEditsDirs(Configuration conf)
       throws IOException {
+    // 包含journal的
     return getNamespaceEditsDirs(conf, true);
   }
   
@@ -4255,6 +4260,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     FSPermissionChecker pc = getPermissionChecker();
     checkOperation(OperationCategory.WRITE);
+    // 一般为null
     byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
     HdfsFileStatus resultingStat = null;
     boolean status = false;
@@ -4263,6 +4269,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       checkOperation(OperationCategory.WRITE);   
       checkNameNodeSafeMode("Cannot create directory " + src);
       src = resolvePath(src, pathComponents);
+      // 1.在内存中mkdirs
       status = mkdirsInternal(pc, src, permissions, createParent);
       if (status) {
         resultingStat = getAuditFileInfo(src, false);
@@ -4270,6 +4277,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     } finally {
       writeUnlock();
     }
+    // 2.同步到磁盘中的editLog
     getEditLog().logSync();
     if (status) {
       logAuditEvent(true, "mkdirs", srcArg, null, resultingStat);
@@ -4304,6 +4312,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // create multiple inodes.
     checkFsObjectLimit();
 
+    // 在FSDirectory(内存目录树)创建目录 + 写edit log
     if (!mkdirsRecursively(src, permissions, false, now())) {
       throw new IOException("Failed to create directory: " + src);
     }
@@ -4332,12 +4341,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           throws FileAlreadyExistsException, QuotaExceededException,
                  UnresolvedLinkException, SnapshotAccessControlException,
                  AclException {
+    // eg:/user/data/log
     src = FSDirectory.normalizePath(src);
     byte[][] components = INode.getPathComponents(src);
     final int lastInodeIndex = components.length - 1;
 
     dir.writeLock();
     try {
+      // 获取现有的
       INodesInPath iip = dir.getExistingPathINodes(components);
       if (iip.isSnapshot()) {
         throw new SnapshotAccessControlException(
@@ -4391,9 +4402,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
 
       // create directories beginning from the first null index
+      // 从第一个不存在的index开始创建目录
       for(; i < inodes.length; i++) {
         pathbuilder.append(Path.SEPARATOR).
             append(DFSUtil.bytes2String(components[i]));
+
+        // 1.在FSDirectory中创建目录(内存数据结构)
+        // 其中核心是 INodeDirectory 和 INodeFile
         dir.unprotectedMkdir(allocateNewInodeId(), iip, i, components[i],
                 (i < lastInodeIndex) ? parentPermissions : permissions, null,
                 now);
@@ -4405,6 +4420,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         NameNode.getNameNodeMetrics().incrFilesCreated();
 
         final String cur = pathbuilder.toString();
+
+        // 2.editLog写磁盘 + journal node
         getEditLog().logMkDir(cur, inodes[i]);
         if(NameNode.stateChangeLog.isDebugEnabled()) {
           NameNode.stateChangeLog.debug(

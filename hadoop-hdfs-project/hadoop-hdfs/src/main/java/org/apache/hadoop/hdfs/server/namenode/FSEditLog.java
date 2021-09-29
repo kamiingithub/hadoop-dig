@@ -237,7 +237,9 @@ public class FSEditLog implements LogsPurgeable {
   public synchronized void initJournalsForWrite() {
     Preconditions.checkState(state == State.UNINITIALIZED ||
         state == State.CLOSED, "Unexpected state: %s", state);
-    
+    // 根据editsDirs初始化流
+    // dfs.namenode.edits.dir  dfs.namenode.shared.edits.dir
+    // 对应      本地磁盘    和    journal
     initJournals(this.editsDirs);
     state = State.BETWEEN_LOG_SEGMENTS;
   }
@@ -250,7 +252,7 @@ public class FSEditLog implements LogsPurgeable {
     }
     Preconditions.checkState(state == State.UNINITIALIZED ||
         state == State.CLOSED);
-    
+    // 根据sharedEditsDirs 初始化journal
     initJournals(this.sharedEditsDirs);
     state = State.OPEN_FOR_READING;
   }
@@ -263,16 +265,19 @@ public class FSEditLog implements LogsPurgeable {
     synchronized(journalSetLock) {
       journalSet = new JournalSet(minimumRedundantJournals);
 
+      // 往journalSet里add JournalAndStream
       for (URI u : dirs) {
         boolean required = FSNamesystem.getRequiredNamespaceEditsDirs(conf)
             .contains(u);
         if (u.getScheme().equals(NNStorage.LOCAL_URI_SCHEME)) {
+          // 本地uri
           StorageDirectory sd = storage.getStorageDirectory(u);
           if (sd != null) {
             journalSet.add(new FileJournalManager(conf, sd, storage),
                 required, sharedEditsDirs.contains(u));
           }
         } else {
+          // journal节点uri
           journalSet.add(createJournal(u), required,
               sharedEditsDirs.contains(u));
         }
@@ -312,7 +317,8 @@ public class FSEditLog implements LogsPurgeable {
       IOUtils.cleanup(LOG, streams.toArray(new EditLogInputStream[0]));
       throw new IllegalStateException(error);
     }
-    
+
+    // startLogSegment
     startLogSegment(segmentTxId, true);
     assert state == State.IN_SEGMENT : "Bad state: " + state;
   }
@@ -404,21 +410,25 @@ public class FSEditLog implements LogsPurgeable {
   }
 
   /**
-   * Write an operation to the edit log. Do not sync to persistent
-   * store yet.
+   * Write an operation to the edit log. Do not sync to persistent store yet.
+   *
    */
   void logEdit(final FSEditLogOp op) {
+    // 上第一个锁
     synchronized (this) {
       assert isOpenForWrite() :
         "bad state: " + state;
       
       // wait if an automatic sync is scheduled
       waitIfAutoSyncScheduled();
-      
+
+      // 设置 txid
       long start = beginTransaction();
       op.setTransactionId(txid);
 
       try {
+        // 先写入 EditLogFileOutputStream + QuorumOutputStream 的双段缓冲
+        // 这里的实现是JournalSetOutputStream
         editLogStream.write(op);
       } catch (IOException ex) {
         // All journals failed, it is handled in logSync.
@@ -434,6 +444,10 @@ public class FSEditLog implements LogsPurgeable {
     }
     
     // sync buffered edit log entries to persistent store
+    // 这里一共用了两个分段锁来保证写edit log的并发安全
+    // 第一个锁里，只做内存操作，非常非常快
+    // 第二个锁里，做了耗时的流操作
+    // 好处就是，在执行第二个锁里的操作时，还可以执行第一个锁的内存操作，提升了吞吐量
     logSync();
   }
 
@@ -567,31 +581,35 @@ public class FSEditLog implements LogsPurgeable {
    * Because this step is unsynchronized, actions that need to avoid
    * concurrency with sync() should be synchronized and also call
    * waitForSyncToFinish() before assuming they are running alone.
+   *
    */
   public void logSync() {
     long syncStart = 0;
 
-    // Fetch the transactionId of this thread. 
+    // Fetch the transactionId of this thread.
+    // 从ThreadLocal拿到之前设置的 txid
     long mytxid = myTransactionId.get().txid;
     
     boolean sync = false;
     try {
       EditLogOutputStream logStream = null;
+      // 上第二个锁
       synchronized (this) {
         try {
           printStatistics(false);
 
           // if somebody is already syncing, then wait
+          // 需要sync && 有正在sync则wait
           while (mytxid > synctxid && isSyncRunning) {
             try {
               wait(1000);
             } catch (InterruptedException ie) {
             }
           }
-  
-          //
+
           // If this transaction was already flushed, then nothing to do
-          //
+          // 如果当前 txid <= 已经syncTxid,说明当前syncTxid之前的log都已经sync了
+          // 这就不需要再snyc了,因为txid是加锁串行递增分配的,所以大的buffer一定包含小的,这时候就不用刷了
           if (mytxid <= synctxid) {
             numTransactionsBatchedInSync++;
             if (metrics != null) {
@@ -611,6 +629,8 @@ public class FSEditLog implements LogsPurgeable {
             if (journalSet.isEmpty()) {
               throw new IOException("No journals available to flush");
             }
+            // 交换两个buffer
+            // 这时bufCurrent里可能会有多个txid的buffer,因为分段加锁,上个sychronized里可能写过此buffer了
             editLogStream.setReadyToFlush();
           } catch (IOException e) {
             final String msg =
@@ -636,6 +656,10 @@ public class FSEditLog implements LogsPurgeable {
       long start = now();
       try {
         if (logStream != null) {
+          // EditLogFileOutputStream -> 本地磁盘
+          // QuorumOutputStream      -> journal 集群
+          // fixme 这里又不知道是两条流还是只有一条 journal 输出流,ActiveNameNode不保存editLog到本地磁盘？
+          //  磁盘上只有从StandByNameNode同步来的 FSImage?然后启动的时候合并本地的FSImage + 从journalNode拉来的 editLog？
           logStream.flush();
         }
       } catch (IOException ex) {
@@ -778,6 +802,7 @@ public class FSEditLog implements LogsPurgeable {
    */
   public void logMkDir(String path, INode newNode) {
     PermissionStatus permissions = newNode.getPermissionStatus();
+    // 构建op
     MkdirOp op = MkdirOp.getInstance(cache.get())
       .reset()
       .setInodeId(newNode.getId())
@@ -794,6 +819,7 @@ public class FSEditLog implements LogsPurgeable {
     if (x != null) {
       op.setXAttrs(x.getXAttrs());
     }
+
     logEdit(op);
   }
   
@@ -1189,6 +1215,7 @@ public class FSEditLog implements LogsPurgeable {
     storage.attemptRestoreRemovedStorage();
     
     try {
+      // 初始化 1)EditLogFileOutputStream 2)QuorumOutputStream
       editLogStream = journalSet.startLogSegment(segmentTxId,
           NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
     } catch (IOException ex) {

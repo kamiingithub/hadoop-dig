@@ -277,7 +277,8 @@ public class FSImage implements Closeable {
     default:
       // just load the image
     }
-    
+
+    // 合并1)从journal拉取的editLog + 2)本地磁盘的 FSImage
     return loadFSImage(target, startOpt, recovery);
   }
   
@@ -623,6 +624,8 @@ public class FSImage implements Closeable {
 
     Iterable<EditLogInputStream> editStreams = null;
 
+    // 初始化 edit log数据流
+    // fixme (这里应该是从journalNode的输入流，因为本地磁盘上没有editLog)
     initEditLog(startOpt);
 
     if (NameNodeLayoutVersion.supports(
@@ -665,6 +668,7 @@ public class FSImage implements Closeable {
     for (int i = 0; i < imageFiles.size(); i++) {
       try {
         imageFile = imageFiles.get(i);
+        // 从磁盘加载FSImage到内存
         loadFSImageFile(target, recovery, imageFile, startOpt);
         break;
       } catch (IOException ioe) {
@@ -681,6 +685,7 @@ public class FSImage implements Closeable {
     prog.endPhase(Phase.LOADING_FSIMAGE);
     
     if (!rollingRollback) {
+      // 从上面初始化过的journal输入流 加载editLog到内存
       long txnsAdvanced = loadEdits(editStreams, target, startOpt, recovery);
       needToSave |= needsResaveBasedOnStaleCheckpoint(imageFile.getFile(),
           txnsAdvanced);
@@ -778,6 +783,8 @@ public class FSImage implements Closeable {
       editLog.recoverUnclosedStreams();
     } else {
       // This NN is HA and we're not doing an upgrade.
+      // HA应该走这边
+      // 初始化从 journal 拉取editLog的输入流
       editLog.initSharedJournalsForRead();
     }
   }
@@ -826,6 +833,7 @@ public class FSImage implements Closeable {
         LOG.info("Reading " + editIn + " expecting start txid #" +
               (lastAppliedTxId + 1));
         try {
+          // 加载
           loader.loadFSEdits(editIn, lastAppliedTxId + 1, startOpt, recovery);
         } finally {
           // Update lastAppliedTxId even in case of error, since some ops may
@@ -901,6 +909,8 @@ public class FSImage implements Closeable {
   /**
    * Load the image namespace from the given image file, verifying
    * it against the MD5 sum stored in its associated .md5 file.
+   *
+   * 从本地磁盘加载 FSImage到内存
    */
   private void loadFSImage(File imageFile, FSNamesystem target,
       MetaRecoveryContext recovery, boolean requireSameLayoutVersion)

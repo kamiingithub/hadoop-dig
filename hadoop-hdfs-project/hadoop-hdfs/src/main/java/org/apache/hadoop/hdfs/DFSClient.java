@@ -2739,6 +2739,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       LOG.debug(src + ": masked=" + absPermission);
     }
     try {
+      // 向nameNode发起rpc请求
       return namenode.mkdirs(src, absPermission, createParent);
     } catch(RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,

@@ -3153,6 +3153,7 @@ public class FSDirectory implements Closeable {
    * @return path components for reserved path, else null.
    */
   static byte[][] getPathComponentsForReservedPath(String src) {
+    // 如果不以/.reserved开头,则null
     return !isReservedName(src) ? null : INode.getPathComponents(src);
   }
 
