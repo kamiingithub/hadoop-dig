@@ -1313,6 +1313,7 @@ public class BlockManager {
     namesystem.writeLock();
     try {
       // Choose the blocks to be replicated
+      // 取出一个要复制的block
       blocksToReplicate = neededReplications
           .chooseUnderReplicatedBlocks(blocksToProcess);
     } finally {
@@ -1390,6 +1391,7 @@ public class BlockManager {
             } else {
               additionalReplRequired = 1; // Needed on a new rack
             }
+            // 1)封装成 work
             work.add(new ReplicationWork(block, bc, srcNode,
                 containingNodes, liveReplicaNodes, additionalReplRequired,
                 priority));
@@ -1412,6 +1414,7 @@ public class BlockManager {
       // choose replication targets: NOT HOLDING THE GLOBAL LOCK
       // It is costly to extract the filename for which chooseTargets is called,
       // so for now we pass in the block collection itself.
+      // 2)选择目标dataNode
       rw.chooseTargets(blockplacement, storagePolicySuite, excludedNodes);
     }
 
@@ -1466,6 +1469,7 @@ public class BlockManager {
           }
 
           // Add block to the to be replicated list
+          // 3)对每个block的复制sourceDataNode，都加入一个复制的targetDataNode列表
           rw.srcNode.addBlockToBeReplicated(block, targets);
           scheduledWork++;
           DatanodeStorageInfo.incrementBlocksScheduled(targets);
@@ -1555,6 +1559,7 @@ public class BlockManager {
     List<DatanodeDescriptor> favoredDatanodeDescriptors = 
         getDatanodeDescriptors(favoredNodes);
     final BlockStoragePolicy storagePolicy = storagePolicySuite.getPolicy(storagePolicyID);
+    // 挑选目标机器
     final DatanodeStorageInfo[] targets = blockplacement.chooseTarget(src,
         numOfReplicas, client, excludedNodes, blocksize, 
         favoredDatanodeDescriptors, storagePolicy);
@@ -3619,6 +3624,7 @@ public class BlockManager {
         try {
           // Process replication work only when active NN is out of safe mode.
           if (namesystem.isPopulatingReplQueues()) {
+            //
             computeDatanodeWork();
             processPendingReplications();
           }
@@ -3665,6 +3671,9 @@ public class BlockManager {
     final int nodesToProcess = (int) Math.ceil(numlive
         * this.blocksInvalidateWorkPct);
 
+    // 1)选择source DataNode
+    // 2)封装成work
+    // 3)为其选择target DataNode
     int workFound = this.computeReplicationWork(blocksToProcess);
 
     // Update counters

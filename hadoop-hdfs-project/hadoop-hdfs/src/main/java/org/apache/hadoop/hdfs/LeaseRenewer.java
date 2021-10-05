@@ -420,6 +420,7 @@ class LeaseRenewer {
       final DFSClient c = copies.get(i);
       //skip if current client name is the same as the previous name.
       if (!c.getClientName().equals(previousName)) {
+        // 续约
         if (!c.renewLease()) {
           if (LOG.isDebugEnabled()) {
             LOG.debug("Did not renew lease for client " +
@@ -445,6 +446,7 @@ class LeaseRenewer {
       final long elapsed = Time.now() - lastRenewed;
       if (elapsed >= getRenewalTime()) {
         try {
+          // 续约
           renew();
           if (LOG.isDebugEnabled()) {
             LOG.debug("Lease renewer daemon for " + clientsString()

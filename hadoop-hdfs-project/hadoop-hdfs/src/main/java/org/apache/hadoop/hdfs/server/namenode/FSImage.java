@@ -1075,10 +1075,12 @@ public class FSImage implements Closeable {
     boolean editLogWasOpen = editLog.isSegmentOpen();
     
     if (editLogWasOpen) {
+      // 1)写editLog到磁盘
       editLog.endCurrentLogSegment(true);
     }
     long imageTxId = getLastAppliedOrWrittenTxId();
     try {
+      // 2)写FSImage到磁盘
       saveFSImageInAllDirs(source, nnf, imageTxId, canceler);
       storage.writeAll();
     } finally {
@@ -1143,6 +1145,7 @@ public class FSImage implements Closeable {
   
       // Since we now have a new checkpoint, we can clean up some
       // old edit logs and checkpoints.
+      // 清理掉老的edit logs
       purgeOldStorage(nnf);
     } finally {
       // Notify any threads waiting on the checkpoint to be canceled

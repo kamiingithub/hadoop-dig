@@ -38,10 +38,15 @@ import com.google.common.annotations.VisibleForTesting;
  * This is created to listen for requests from clients or 
  * other DataNodes.  This small server does not use the 
  * Hadoop IPC mechanism.
+ *
+ * 专门用于接收or发送block
+ * 监听 client 或 其他 datanode发送的请求
+ *
  */
 class DataXceiverServer implements Runnable {
   public static final Log LOG = DataNode.LOG;
-  
+
+  // 底层负责监听和发送的组件
   private final PeerServer peerServer;
   private final DataNode datanode;
   private final HashMap<Peer, Thread> peers = new HashMap<Peer, Thread>();
@@ -132,6 +137,7 @@ class DataXceiverServer implements Runnable {
     Peer peer = null;
     while (datanode.shouldRun && !datanode.shutdownForUpgrade) {
       try {
+        // accept
         peer = peerServer.accept();
 
         // Make sure the xceiver count is not exceeded
@@ -142,6 +148,7 @@ class DataXceiverServer implements Runnable {
               + maxXceiverCount);
         }
 
+        // 来一个请求,就启动后台线程
         new Daemon(datanode.threadGroup,
             DataXceiver.create(peer, datanode, this))
             .start();

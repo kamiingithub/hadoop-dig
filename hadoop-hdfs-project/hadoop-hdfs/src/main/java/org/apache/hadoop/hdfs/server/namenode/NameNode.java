@@ -772,6 +772,7 @@ public class NameNode implements NameNodeStatusMXBean {
       try {
         haContext.writeLock();
         state.prepareToEnterState(haContext);
+        // 这里会启动一些后台线程 包括leaseManager的Monitor
         state.enterState(haContext);
       } finally {
         haContext.writeUnlock();

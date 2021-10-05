@@ -371,7 +371,8 @@ public class Journal implements Closeable {
     // "catching up" with the rest. Hence we do not need to fsync.
     boolean isLagging = lastTxnId <= committedTxnId.get();
     boolean shouldFsync = !isLagging;
-    
+
+    // 写到本地磁盘
     curSegment.writeRaw(records, 0, records.length);
     curSegment.setReadyToFlush();
     Stopwatch sw = new Stopwatch();

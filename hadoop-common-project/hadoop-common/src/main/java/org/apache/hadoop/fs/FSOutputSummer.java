@@ -114,22 +114,29 @@ abstract public class FSOutputSummer extends OutputStream {
   /**
    * Write a portion of an array, flushing to the underlying
    * stream at most once if necessary.
+   *
+   * 写入数据
    */
   private int write1(byte b[], int off, int len) throws IOException {
+    // buf的长度默认是 9*512
     if(count==0 && len>=buf.length) {
       // local buffer is empty and user buffer size >= local buffer size, so
       // simply checksum the user buffer and send it directly to the underlying
       // stream
+      // 这里是说直接达到一个buf的大小了
+      // 就不需要写到缓冲了，直接写入底层的流了
       final int length = buf.length;
+      // 写 校验和+chunk
       writeChecksumChunks(b, off, length);
       return length;
     }
     
     // copy user data to local buffer
     int bytesToCopy = buf.length-count;
-    bytesToCopy = (len<bytesToCopy) ? len : bytesToCopy;
+    bytesToCopy = Math.min(len, bytesToCopy);
     System.arraycopy(b, off, buf, count, bytesToCopy);
     count += bytesToCopy;
+    // 当输入的字节数组达到buf的大小
     if (count == buf.length) {
       // local buffer is full
       flushBuffer();
@@ -200,9 +207,12 @@ abstract public class FSOutputSummer extends OutputStream {
   private void writeChecksumChunks(byte b[], int off, int len)
   throws IOException {
     sum.calculateChunkedSums(b, off, len, checksum, 0);
-    for (int i = 0; i < len; i += sum.getBytesPerChecksum()) {
+    // 把切割chunk一个个的512字节
+    for (int i = 0; i < len; i += sum.getBytesPerChecksum()) { // 每次增加 512 字节
+      // 这里就是在切割
       int chunkLen = Math.min(sum.getBytesPerChecksum(), len - i);
       int ckOffset = i / sum.getBytesPerChecksum() * getChecksumSize();
+      // 写chunk
       writeChunk(b, off + i, chunkLen, checksum, ckOffset, getChecksumSize());
     }
   }

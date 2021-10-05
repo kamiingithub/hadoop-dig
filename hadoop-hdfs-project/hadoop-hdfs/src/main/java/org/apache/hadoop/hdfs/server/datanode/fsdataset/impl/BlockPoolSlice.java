@@ -263,6 +263,7 @@ class BlockPoolSlice {
    * the block is finalized.
    */
   File createRbwFile(Block b) throws IOException {
+    // 创建文件 blk_0000000001
     File f = new File(rbwDir, b.getBlockName());
     return DatanodeUtil.createTmpFile(b, f);
   }

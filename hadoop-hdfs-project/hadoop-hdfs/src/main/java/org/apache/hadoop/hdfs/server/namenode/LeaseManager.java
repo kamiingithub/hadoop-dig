@@ -81,12 +81,13 @@ public class LeaseManager {
   //
   private final SortedMap<String, Lease> leases = new TreeMap<String, Lease>();
   // Set of: Lease
+  // 根据lastUpdate正序排列
   private final NavigableSet<Lease> sortedLeases = new TreeSet<Lease>();
 
   // 
   // Map path names to leases. It is protected by the sortedLeases lock.
   // The map stores pathnames in lexicographical order.
-  //
+  // <文件路径, Lease>
   private final SortedMap<String, Lease> sortedLeasesByPath = new TreeMap<String, Lease>();
 
   private Daemon lmthread;
@@ -154,6 +155,7 @@ public class LeaseManager {
   
   /**
    * Adds (or re-adds) the lease for the specified file.
+   * 在各种数据结构中add lease
    */
   synchronized Lease addLease(String holder, String src) {
     Lease lease = getLease(holder);
@@ -220,6 +222,8 @@ public class LeaseManager {
 
   /**
    * Renew the lease(s) held by the given client
+   *
+   * 续约
    */
   synchronized void renewLease(String holder) {
     renewLease(getLease(holder));
@@ -251,6 +255,7 @@ public class LeaseManager {
   class Lease implements Comparable<Lease> {
     private final String holder;
     private long lastUpdate;
+    // 表示这个lease对哪些路径有所有权
     private final Collection<String> paths = new TreeSet<String>();
   
     /** Only LeaseManager object can create a lease */
@@ -399,12 +404,14 @@ public class LeaseManager {
 
   public void setLeasePeriod(long softLimit, long hardLimit) {
     this.softLimit = softLimit;
-    this.hardLimit = hardLimit; 
+    this.hardLimit = hardLimit;
   }
   
   /******************************************************
    * Monitor checks for leases that have expired,
    * and disposes of them.
+   *
+   * 监控过期的 lease并释放
    ******************************************************/
   class Monitor implements Runnable {
     final String name = getClass().getSimpleName();
@@ -418,6 +425,7 @@ public class LeaseManager {
           fsnamesystem.writeLockInterruptibly();
           try {
             if (!fsnamesystem.isInSafeMode()) {
+              // 检查
               needSync = checkLeases();
             }
           } finally {
@@ -470,10 +478,13 @@ public class LeaseManager {
     assert fsnamesystem.hasWriteLock();
     Lease leaseToCheck = null;
     try {
+      // 拿到最早的一个契约
       leaseToCheck = sortedLeases.first();
     } catch(NoSuchElementException e) {}
 
+    // 从最早的契约开始,过期掉lastUpdate超过1hour的契约
     while(leaseToCheck != null) {
+      // 判断是否过期
       if (!leaseToCheck.expiredHardLimit()) {
         break;
       }
@@ -485,10 +496,12 @@ public class LeaseManager {
       // internalReleaseLease() removes paths corresponding to empty files,
       // i.e. it needs to modify the collection being iterated over
       // causing ConcurrentModificationException
+      // 拿到这个lease下所有的文件路径
       String[] leasePaths = new String[leaseToCheck.getPaths().size()];
       leaseToCheck.getPaths().toArray(leasePaths);
       for(String p : leasePaths) {
         try {
+          // 释放契约
           boolean completed = fsnamesystem.internalReleaseLease(leaseToCheck, p,
               HdfsServerConstants.NAMENODE_LEASE_HOLDER);
           if (LOG.isDebugEnabled()) {
@@ -510,8 +523,10 @@ public class LeaseManager {
       }
 
       for(String p : removing) {
+        // 删除契约
         removeLease(leaseToCheck, p);
       }
+      // 拿到下个契约准备去check
       leaseToCheck = sortedLeases.higher(leaseToCheck);
     }
 
@@ -533,6 +548,9 @@ public class LeaseManager {
         + "\n}";
   }
 
+  /**
+   * 启动监控
+   */
   void startMonitor() {
     Preconditions.checkState(lmthread == null,
         "Lease Monitor already running");

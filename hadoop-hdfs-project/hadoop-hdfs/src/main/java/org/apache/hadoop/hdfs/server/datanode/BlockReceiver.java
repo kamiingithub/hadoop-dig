@@ -534,6 +534,7 @@ class BlockReceiver implements Closeable {
     
     // put in queue for pending acks, unless sync was requested
     if (responder != null && !syncBlock && !shouldVerifyChecksum()) {
+      // 1)ackQueue入队
       ((PacketResponder) responder.getRunnable()).enqueue(seqno,
           lastPacketInBlock, offsetInBlock, Status.SUCCESS);
     }
@@ -545,11 +546,13 @@ class BlockReceiver implements Closeable {
     }
 
     //First write the packet to the mirror:
+    // 2)写到下一台dataNode
     if (mirrorOut != null && !mirrorError) {
       try {
         long begin = Time.monotonicNow();
         // For testing. Normally no-op.
         DataNodeFaultInjector.get().stopSendingPacketDownstream();
+        // 写到下一台dataNode
         packetReceiver.mirrorPacketTo(mirrorOut);
         mirrorOut.flush();
         long now = Time.monotonicNow();
@@ -586,6 +589,7 @@ class BlockReceiver implements Closeable {
 
       if (checksumReceivedLen > 0 && shouldVerifyChecksum()) {
         try {
+          // 校验checksum
           verifyChunks(dataBuf, checksumBuf);
         } catch (IOException ioe) {
           // checksum error detected locally. there is no reason to continue.
@@ -685,6 +689,7 @@ class BlockReceiver implements Closeable {
           
           // Write data to disk.
           long begin = Time.monotonicNow();
+          // 3)写磁盘
           out.write(dataBuf.array(), startByteToDisk, numBytesToDisk);
           long duration = Time.monotonicNow() - begin;
           if (duration > datanodeSlowLogThresholdMs) {
@@ -888,6 +893,8 @@ class BlockReceiver implements Closeable {
         responder.start(); // start thread to processes responses
       }
 
+      // 接收packet
+      // 1)ackQueue入队 2)写到下一个dataNode 3)写磁盘
       while (receivePacket() >= 0) { /* Receive until the last packet */ }
 
       // wait for all outstanding packet responses. And then
@@ -1272,6 +1279,7 @@ class BlockReceiver implements Closeable {
           try {
             if (type != PacketResponderType.LAST_IN_PIPELINE && !mirrorError) {
               // read an ack from downstream datanode
+              // 从下游读取ack
               ack.readFields(downstreamIn);
               ackRecvNanoTime = System.nanoTime();
               if (LOG.isDebugEnabled()) {
@@ -1318,6 +1326,7 @@ class BlockReceiver implements Closeable {
                   datanode.metrics.addPacketAckRoundTripTimeNanos(ackTimeNanos);
                 }
               }
+              // 空packet？
               lastPacketInBlock = pkt.lastPacketInBlock;
             }
           } catch (InterruptedException ine) {
@@ -1364,9 +1373,11 @@ class BlockReceiver implements Closeable {
 
           if (lastPacketInBlock) {
             // Finalize the block and close the block file
+            // 关闭block的一些资源
             finalizeBlock(startTime);
           }
 
+          // 发送ack给上游dataNode
           sendAckUpstream(ack, expected, totalAckTimeNanos,
               (pkt != null ? pkt.offsetInBlock : 0), 
               (pkt != null ? pkt.ackStatus : Status.SUCCESS));
@@ -1498,6 +1509,7 @@ class BlockReceiver implements Closeable {
               + "thread is corrupt");
         }
       }
+      // 构造ack
       PipelineAck replyAck = new PipelineAck(seqno, replies,
           totalAckTimeNanos);
       if (replyAck.isSuccess()

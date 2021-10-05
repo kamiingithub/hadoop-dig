@@ -487,6 +487,7 @@ class BPServiceActor implements Runnable {
     // we have a chance that we will miss the delHint information
     // or we will report an RBW replica after the BlockReport already reports
     // a FINALIZED one.
+    // 增量上报
     reportReceivedDeletedBlocks();
     lastDeletedReport = startTime;
 
@@ -755,12 +756,12 @@ class BPServiceActor implements Runnable {
 
         if (sendImmediateIBR ||
             (startTime - lastDeletedReport > dnConf.deleteReportInterval)) {
-          // report被删除的blocks
+          // report被删除的blocks 默认五分钟
           reportReceivedDeletedBlocks();
           lastDeletedReport = startTime;
         }
 
-        // 2.blockReport
+        // 2.blockReport 默认6小时
         List<DatanodeCommand> cmds = blockReport();
         processCommand(cmds == null ? null : cmds.toArray(new DatanodeCommand[cmds.size()]));
 

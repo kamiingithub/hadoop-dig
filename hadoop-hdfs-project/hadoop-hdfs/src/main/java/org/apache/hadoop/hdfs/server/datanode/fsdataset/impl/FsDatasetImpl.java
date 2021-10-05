@@ -1058,6 +1058,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       try {
         if (allowLazyPersist) {
           // First try to place the block on a transient volume.
+          // 选一个volume
           v = volumes.getNextTransientVolume(b.getNumBytes());
           datanode.getMetrics().incrRamDiskBlocksWrite();
         } else {
@@ -1074,6 +1075,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       break;
     }
     // create an rbw file to hold block in the designated volume
+    // 创建文件
     File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
     ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(), 
         b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());

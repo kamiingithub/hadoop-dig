@@ -179,6 +179,7 @@ public class StandbyCheckpointer {
       } else {
         imageType = NameNodeFile.IMAGE;
       }
+      // 1)写editLog到磁盘
       img.saveNamespace(namesystem, imageType, canceler);
       txid = img.getStorage().getMostRecentCheckpointTxId();
       assert txid == thisCheckpointTxId : "expected to save checkpoint at txid=" +
@@ -196,11 +197,13 @@ public class StandbyCheckpointer {
     // Upload the saved checkpoint back to the active
     // Do this in a separate thread to avoid blocking transition to active
     // See HDFS-4816
+    // 再起一个线程异步地把磁盘上地FSImage上传给ANN,避免阻塞
     ExecutorService executor =
         Executors.newSingleThreadExecutor(uploadThreadFactory);
     Future<Void> upload = executor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
+        // 2)上传FSImage给 acticeNameNode
         TransferFsImage.uploadImageFromStorage(activeNNAddress, conf,
             namesystem.getFSImage().getStorage(), imageType, txid, canceler);
         return null;
@@ -320,13 +323,13 @@ public class StandbyCheckpointer {
           boolean needCheckpoint = needRollbackCheckpoint;
           if (needCheckpoint) {
             LOG.info("Triggering a rollback fsimage for rolling upgrade.");
-          } else if (uncheckpointed >= checkpointConf.getTxnCount()) {
+          } else if (uncheckpointed >= checkpointConf.getTxnCount()) { // 默认100w
             LOG.info("Triggering checkpoint because there have been " + 
                 uncheckpointed + " txns since the last checkpoint, which " +
                 "exceeds the configured threshold " +
                 checkpointConf.getTxnCount());
             needCheckpoint = true;
-          } else if (secsSinceLast >= checkpointConf.getPeriod()) {
+          } else if (secsSinceLast >= checkpointConf.getPeriod()) { // 默认一小时
             LOG.info("Triggering checkpoint because it has been " +
                 secsSinceLast + " seconds since the last checkpoint, which " +
                 "exceeds the configured interval " + checkpointConf.getPeriod());
@@ -344,6 +347,7 @@ public class StandbyCheckpointer {
           }
           
           if (needCheckpoint) {
+            // checkpoint 1)写editLog、FSImage到磁盘 2)把FSImage上传给ANN
             doCheckpoint();
             // reset needRollbackCheckpoint to false only when we finish a ckpt
             // for rollback image

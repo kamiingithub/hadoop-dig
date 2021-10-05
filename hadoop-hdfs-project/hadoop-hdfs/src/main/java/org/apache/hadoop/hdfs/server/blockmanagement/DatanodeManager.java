@@ -1440,6 +1440,7 @@ public class DatanodeManager {
 
         final List<DatanodeCommand> cmds = new ArrayList<DatanodeCommand>();
         //check pending replication
+        // 取出这个dataNode需要复制的任务
         List<BlockTargetPair> pendingList = nodeinfo.getReplicationCommand(
               maxTransfers);
         if (pendingList != null) {

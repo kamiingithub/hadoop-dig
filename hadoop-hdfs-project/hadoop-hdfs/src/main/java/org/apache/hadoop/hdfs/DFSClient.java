@@ -234,6 +234,10 @@ import com.google.common.net.InetAddresses;
  * DistributedFileSystem, which uses DFSClient to handle
  * filesystem tasks.
  *
+ * DFSClient可以连接到hdfs集群，以及执行一些基础性的文件操作。它是使用ClientProtocol这个rpc协议
+ * 来根nameNode进程进行通信，以及可以直接连接到dataNode上去读写block数据
+ * hdfs用户应该获取一个DistributedFileSystem对象实例，这个对象实例底层会通过DFSClient来处理文件系统的操作
+ *
  ********************************************************/
 @InterfaceAudience.Private
 public class DFSClient implements java.io.Closeable, RemotePeerFactory,
@@ -1627,7 +1631,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    * replication, to move the blocks from favored nodes. A value of null means
    * no favored nodes for this create
    */
-  public DFSOutputStream create(String src, 
+  public DFSOutputStream create(String src,
                              FsPermission permission,
                              EnumSet<CreateFlag> flag, 
                              boolean createParent,
@@ -1654,10 +1658,13 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                          + favoredNodes[i].getPort();
       }
     }
+    // 构建输出流
     final DFSOutputStream result = DFSOutputStream.newStreamForCreate(this,
         src, masked, flag, createParent, replication, blockSize, progress,
         buffersize, dfsClientConf.createChecksum(checksumOpt),
         favoredNodeStrs);
+
+    // 开启文件契约
     beginFileLease(result.getFileId(), result);
     return result;
   }

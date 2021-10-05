@@ -2758,6 +2758,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       Path parent = new Path(src).getParent();
       if (parent != null && mkdirsRecursively(parent.toString(),
               permissions, true, now())) {
+        // 1) 在内存目录数中 add file
         newNode = dir.addFile(src, permissions, replication, blockSize,
                               holder, clientMachine);
       }
@@ -2765,6 +2766,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       if (newNode == null) {
         throw new IOException("Unable to add " + src +  " to namespace");
       }
+      // 2) 增加契约
       leaseManager.addLease(newNode.getFileUnderConstructionFeature()
           .getClientName(), src);
 
@@ -2777,6 +2779,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       setNewINodeStoragePolicy(newNode, iip, isLazyPersist);
 
       // record file record in log, record new generation stamp
+      // 3) 记录增加契约的edit log
       getEditLog().logOpenFile(src, newNode, overwrite, logRetryEntry);
       if (NameNode.stateChangeLog.isDebugEnabled()) {
         NameNode.stateChangeLog.debug("DIR* NameSystem.startFile: added " +
@@ -3196,6 +3199,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
    * Make sure the previous blocks have been reported by datanodes and
    * are replicated.  Will return an empty 2-elt array if we want the
    * client to "try again later".
+   *
+   * 就是说hdfs客户端想要申请一个新的block，这个block是属于一个文件的
+   * 这个方法会返回一个block，里面会包含这个block的副本都在哪些及其上面(datanode)
+   * 这个block里面的多个datanode中的第一个，是hdfs客户端会写数据的那个
+   * 其他的datanode需要跟第一个datanode建立连接，数据管道
    */
   LocatedBlock getAdditionalBlock(String src, long fileId, String clientName,
       ExtendedBlock previous, Set<Node> excludedNodes, 
@@ -3253,6 +3261,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
 
     // choose targets for the new block to be allocated.
+    // 1)为新的block选择一批机器(机架感知)
     final DatanodeStorageInfo targets[] = getBlockManager().chooseTarget4NewBlock( 
         src, replication, clientNode, excludedNodes, blockSize, favoredNodes,
         storagePolicyID);
@@ -3293,18 +3302,23 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
                                 ExtendedBlock.getLocalBlock(previous));
 
       // allocate new block, record block locations in INode.
+      // 2)构造一个新的block
       newBlock = createNewBlock();
       INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
+      // 3)把block加到 FSDirectory下对应 INodeFile里
       saveAllocatedBlock(src, inodesInPath, newBlock, targets);
 
+      // 4)写edit log到磁盘
       persistNewBlock(src, pendingFile);
       offset = pendingFile.computeFileSize();
     } finally {
       writeUnlock();
     }
+    // sync
     getEditLog().logSync();
 
     // Return located block
+    // 5)构造LocatedBlock返回
     return makeLocatedBlock(newBlock, targets, offset);
   }
 
@@ -3543,7 +3557,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
       //
       // Remove the block from the pending creates list
-      //
+      // 1)从FSDirectory和blockManager移除block
       boolean removed = dir.removeBlock(src, file,
           ExtendedBlock.getLocalBlock(b));
       if (!removed) {
@@ -3553,6 +3567,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         NameNode.stateChangeLog.debug("BLOCK* NameSystem.abandonBlock: "
                                       + b + " is removed from pendingCreates");
       }
+      // 2)写edit log
       persistBlocks(src, file, false);
     } finally {
       writeUnlock();
@@ -5108,7 +5123,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       //get datanode commands
       final int maxTransfer = blockManager.getMaxReplicationStreams()
           - xmitsInProgress;
-      // 交给dataNodeManager处理
+      // 发送心跳并获取cmd
       DatanodeCommand[] cmds = blockManager.getDatanodeManager().handleHeartbeat(
           nodeReg, reports, blockPoolId, cacheCapacity, cacheUsed,
           xceiverCount, maxTransfer, failedVolumes);
@@ -6309,6 +6324,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // Calculate number of blocks under construction
     long numUCBlocks = 0;
     readLock();
+    // 获取还在创建中的block数量
     numUCBlocks = leaseManager.getNumUnderConstructionBlocks();
     try {
       return getBlocksTotal() - numUCBlocks;

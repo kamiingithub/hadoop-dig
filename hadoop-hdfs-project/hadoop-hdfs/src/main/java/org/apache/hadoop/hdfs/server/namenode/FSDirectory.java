@@ -406,7 +406,9 @@ public class FSDirectory implements Closeable {
             fileINode.getFileReplication(),
             BlockUCState.UNDER_CONSTRUCTION,
             targets);
+      // 加入blockManager的管理
       getBlockManager().addBlockCollection(blockInfo, fileINode);
+      // 把block加到 iNodeFile的BlockInfo[]里
       fileINode.addBlock(blockInfo);
 
       if(NameNode.stateChangeLog.isDebugEnabled()) {
@@ -440,10 +442,12 @@ public class FSDirectory implements Closeable {
       INodeFile fileNode, Block block) throws IOException {
     // modify file-> block and blocksMap
     // fileNode should be under construction
+    // 移除block
     boolean removed = fileNode.removeLastBlock(block);
     if (!removed) {
       return false;
     }
+    // 移除block
     getBlockManager().removeBlockFromMap(block);
 
     if(NameNode.stateChangeLog.isDebugEnabled()) {

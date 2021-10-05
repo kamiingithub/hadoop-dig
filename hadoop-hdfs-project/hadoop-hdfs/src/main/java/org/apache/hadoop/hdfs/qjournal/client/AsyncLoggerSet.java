@@ -256,7 +256,8 @@ class AsyncLoggerSet {
     Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
     // 把send给每个journal节点的 future 保存住
     for (AsyncLogger logger : loggers) {
-      ListenableFuture<Void> future = 
+      // 发给journalNode
+      ListenableFuture<Void> future =
         logger.sendEdits(segmentTxId, firstTxnId, numTxns, data);
       calls.put(logger, future);
     }

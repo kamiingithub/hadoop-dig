@@ -579,6 +579,10 @@ class NameNodeRpcServer implements NamenodeProtocols {
           + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
     }
     namesystem.checkOperation(OperationCategory.WRITE);
+    // 这里主要做了
+    // 1) 在DFSDirectory里add file
+    // 2) 在LeaseManager里add lease
+    // 3) 把add lease写到edit log
     HdfsFileStatus fileStatus = namesystem.startFile(src, new PermissionStatus(
         getRemoteUser().getShortUserName(), null, masked),
         clientName, clientMachine, flag.get(), createParent, replication,
@@ -654,6 +658,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       stateChangeLog.debug("*BLOCK* NameNode.addBlock: file " + src
           + " fileId=" + fileId + " for " + clientName);
     }
+    // 排除节点
     Set<Node> excludedNodesSet = null;
     if (excludedNodes != null) {
       excludedNodesSet = new HashSet<Node>(excludedNodes.length);
@@ -1153,6 +1158,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       int failedVolumes) throws IOException {
     checkNNStartup();
     verifyRequest(nodeReg);
+    // 心跳
     return namesystem.handleHeartbeat(nodeReg, report,
         dnCacheCapacity, dnCacheUsed, xceiverCount, xmitsInProgress,
         failedVolumes);
