@@ -1794,6 +1794,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   LocatedBlocks getBlockLocations(String clientMachine, String src,
       long offset, long length) throws AccessControlException,
       FileNotFoundException, UnresolvedLinkException, IOException {
+    /**
+     * 找blockManager构建block信息 包括每个block在哪些datanode上
+     * @see BlockManager#createLocatedBlocks
+     */
     LocatedBlocks blocks = getBlockLocations(src, offset, length, true, true,
         true);
     if (blocks != null) {
@@ -1801,6 +1805,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           blocks.getLocatedBlocks());
 
       // lastBlock is not part of getLocatedBlocks(), might need to sort it too
+      // 最后一个block
       LocatedBlock lastBlock = blocks.getLastLocatedBlock();
       if (lastBlock != null) {
         ArrayList<LocatedBlock> lastBlockList =
@@ -1938,6 +1943,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           null : dir.getFileEncryptionInfo(inode, iip.getPathSnapshotId(),
               iip);
 
+        // 找blockManager创建locatedBlocks
         final LocatedBlocks blocks =
           blockManager.createLocatedBlocks(inode.getBlocks(), fileSize,
             isUc, offset, length, needBlockToken, iip.isSnapshot(), feInfo);

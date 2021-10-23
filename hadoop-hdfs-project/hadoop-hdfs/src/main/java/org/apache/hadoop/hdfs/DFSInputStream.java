@@ -239,8 +239,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * Grab the open-file info from namenode
    */
   synchronized void openInfo() throws IOException, UnresolvedLinkException {
+    // 从namenode拉取block并获取最后一个block的长度
     lastBlockBeingWrittenLength = fetchLocatedBlocksAndGetLastBlockLength();
     int retriesForLastBlockLength = dfsClient.getConf().retryTimesForGetLastBlockLength;
+    // 失败重试
     while (retriesForLastBlockLength > 0) {
       // Getting last block length as -1 is a special case. When cluster
       // restarts, DNs may not report immediately. At this time partial block
@@ -272,6 +274,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   }
 
   private long fetchLocatedBlocksAndGetLastBlockLength() throws IOException {
+    // 向namenode发起rpc请求获取这个文件的block信息
     final LocatedBlocks newInfo = dfsClient.getLocatedBlocks(src, 0);
     if (DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("newInfo = " + newInfo);
@@ -281,6 +284,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     }
 
     if (locatedBlocks != null) {
+      // 比较block是否变更
       Iterator<LocatedBlock> oldIter = locatedBlocks.getLocatedBlocks().iterator();
       Iterator<LocatedBlock> newIter = newInfo.getLocatedBlocks().iterator();
       while (oldIter.hasNext() && newIter.hasNext()) {
@@ -289,6 +293,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
         }
       }
     }
+    // 保存住
     locatedBlocks = newInfo;
     long lastBlockBeingWrittenLength = 0;
     if (!locatedBlocks.isLastBlockComplete()) {
@@ -601,11 +606,12 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     while (true) {
       //
       // Compute desired block
-      //
+      // 拿到一个要复制的block
       LocatedBlock targetBlock = getBlockAt(target, true);
       assert (target==pos) : "Wrong postion " + pos + " expect " + target;
       long offsetIntoBlock = target - targetBlock.getStartOffset();
 
+      // 选择一个目标datanode
       DNAddrPair retval = chooseDataNode(targetBlock, null);
       chosenNode = retval.info;
       InetSocketAddress targetAddr = retval.addr;
@@ -614,6 +620,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       try {
         ExtendedBlock blk = targetBlock.getBlock();
         Token<BlockTokenIdentifier> accessToken = targetBlock.getBlockToken();
+        // 构造reader
         blockReader = new BlockReaderFactory(dfsClient.getConf()).
             setInetSocketAddress(targetAddr).
             setRemotePeerFactory(dfsClient).
@@ -787,6 +794,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     while (true) {
       // retry as many times as seekToNewSource allows.
       try {
+        // 不断地读取packet
         return reader.doRead(blockReader, off, len, readStatistics);
       } catch ( ChecksumException ce ) {
         DFSClient.LOG.warn("Found Checksum error for "
@@ -838,6 +846,8 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
           // currentNode can be left as null if previous read had a checksum
           // error on the same block. See HDFS-3067
           if (pos > blockEnd || currentNode == null) {
+            // 当读取的数据超过了block的量 ｜｜ 第一次读block
+            // 1)选一个合适的datanode并构造RemoteBlockReader
             currentNode = blockSeekTo(pos);
           }
           int realLen = (int) Math.min(len, (blockEnd - pos + 1L));
@@ -845,9 +855,11 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
             realLen = (int) Math.min(realLen,
                 locatedBlocks.getFileLength() - pos);
           }
+          // 2)读取数据
           int result = readBuffer(strategy, off, realLen, corruptedBlockMap);
           
           if (result >= 0) {
+            // 累计pos
             pos += result;
           } else {
             // got a EOS from reader though we expect more data on it.

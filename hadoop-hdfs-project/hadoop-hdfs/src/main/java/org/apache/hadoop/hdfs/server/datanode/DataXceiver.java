@@ -527,6 +527,7 @@ class DataXceiver extends Receiver implements Runnable {
       // send op status
       writeSuccessWithChecksumInfo(blockSender, new DataOutputStream(getOutputStream()));
 
+      // sendBlock
       long read = blockSender.sendBlock(out, baseStream, null); // send data
 
       if (blockSender.didSendEntireByteRange()) {

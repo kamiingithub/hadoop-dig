@@ -389,15 +389,16 @@ public class RemoteBlockReader extends FSInputChecker implements BlockReader {
                                      CachingStrategy cachingStrategy)
                                        throws IOException {
     // in and out will be closed when sock is closed (by the caller)
+    // 在构造BlockReader的时候，就会跟datanode完成socket连接
     final DataOutputStream out =
         new DataOutputStream(new BufferedOutputStream(peer.getOutputStream()));
+    // 告诉datanode要准备读取了
     new Sender(out).readBlock(block, blockToken, clientName, startOffset, len,
         verifyChecksum, cachingStrategy);
     
     //
     // Get bytes in block, set streams
-    //
-
+    // 输入流
     DataInputStream in = new DataInputStream(
         new BufferedInputStream(peer.getInputStream(), bufferSize));
     
@@ -420,6 +421,7 @@ public class RemoteBlockReader extends FSInputChecker implements BlockReader {
                             startOffset + " for file " + file);
     }
 
+    // 构造reader
     return new RemoteBlockReader(file, block.getBlockPoolId(), block.getBlockId(),
         in, checksum, verifyChecksum, startOffset, firstChunkOffset, len,
         peer, datanodeID, peerCache);

@@ -165,6 +165,7 @@ public class RemoteBlockReader2  implements BlockReader {
   @Override
   public int read(ByteBuffer buf) throws IOException {
     if (curDataSlice == null || curDataSlice.remaining() == 0 && bytesNeededToFinish > 0) {
+      // 读取packet
       readNextPacket();
     }
     if (curDataSlice.remaining() == 0) {
@@ -230,7 +231,9 @@ public class RemoteBlockReader2  implements BlockReader {
     // If we've now satisfied the whole client read, read one last packet
     // header, which should be empty
     if (bytesNeededToFinish <= 0) {
+      // 读到空packet了
       readTrailingEmptyPacket();
+      // 给datanode返回一个读取的结果
       if (verifyChecksum) {
         sendReadResult(Status.CHECKSUM_OK);
       } else {

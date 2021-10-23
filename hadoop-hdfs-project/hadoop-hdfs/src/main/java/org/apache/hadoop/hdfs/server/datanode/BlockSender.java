@@ -732,10 +732,12 @@ class BlockSender implements java.io.Closeable {
         pktBufSize += (chunkSize + checksumSize) * maxChunksPerPacket;
       }
 
+      // nio相关的 分配buffer
       ByteBuffer pktBuf = ByteBuffer.allocate(pktBufSize);
 
       while (endOffset > offset && !Thread.currentThread().isInterrupted()) {
         manageOsCache();
+        // 不断地发送packet
         long len = sendPacket(pktBuf, maxChunksPerPacket, streamForSendChunks,
             transferTo, throttler);
         offset += len;

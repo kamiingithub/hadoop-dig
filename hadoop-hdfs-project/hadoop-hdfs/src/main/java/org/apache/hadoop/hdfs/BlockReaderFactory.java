@@ -624,6 +624,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
     }
 
     while (true) {
+      //
       BlockReaderPeer curPeer = nextDomainPeer();
       if (curPeer == null) break;
       if (curPeer.fromCache) remainingCacheTries--;
@@ -690,10 +691,12 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
       BlockReaderPeer curPeer = null;
       Peer peer = null;
       try {
+        // 拿到peer
         curPeer = nextTcpPeer();
         if (curPeer == null) break;
         if (curPeer.fromCache) remainingCacheTries--;
         peer = curPeer.peer;
+        // 构造reader
         blockReader = getRemoteBlockReader(peer);
         return blockReader;
       } catch (IOException ioe) {
@@ -775,6 +778,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
       }
     }
     try {
+      // 跟对应的datanode建立socket连接，并建立输入输出流
       Peer peer = remotePeerFactory.newConnectedPeer(inetSocketAddress, token,
         datanode);
       if (LOG.isTraceEnabled()) {
